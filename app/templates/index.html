@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Translator Service</title>
+  </head>
+  <body>
+    <h1>Translator Service</h1>
+
+    <div>
+      <label for="text">Text to Translate:</label><br />
+      <textarea
+        id="text"
+        rows="8"
+        cols="60"
+        placeholder="Enter text here..."
+      ></textarea>
+    </div>
+
+    <div>
+      <label for="languages">Languages (comma-separated):</label><br />
+      <input
+        id="languages"
+        type="text"
+        size="50"
+        placeholder="e.g., english, german, russian"
+      />
+    </div>
+
+    <div>
+      <button onclick="translateText()">Translate</button>
+    </div>
+
+    <hr />
+
+    <h3>Translation Result</h3>
+    <pre id="resultBox">No translation yet.</pre>
+
+    <script>
+      async function translateText() {
+        // Extract the text and languages from the form
+        const text_for_translation = document.getElementById("text").value;
+        const languages_chosen = document.getElementById("languages").value;
+
+        // validation
+        if (!text_for_translation.trim() || !languages_chosen.trim()) {
+          document.getElementById("resultBox").textContent =
+            "Please enter text and at least one language.";
+          return;
+        }
+
+        // payload
+        const payload = {
+          text: text_for_translation,
+          languages: languages_chosen.split(",").map((lang) => lang.trim()),
+        };
+
+        try {
+          // Send translation request
+          const response = await fetch("http://localhost:8000/translate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          // Handle error responses
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+
+          const result = await response.json();
+          const taskId = result.task_id;
+
+          document.getElementById("resultBox").textContent =
+            `Fetching translation...`;
+
+          // Poll backend every 2 seconds for the result
+          const pollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await fetch(
+                `http://localhost:8000/translate/${taskId}`
+              );
+
+              const statusData = await statusResponse.json();
+
+              if (statusData.status === "completed") {
+                clearInterval(pollInterval);
+
+                let translations =
+                  statusData.translation || statusData.translations;
+
+                if (typeof translations === "string") {
+                  try {
+                    translations = JSON.parse(translations);
+                  } catch (e) {
+                    console.error(
+                      "Parsing error: backend returned malformed JSON"
+                    );
+                  }
+                }
+
+                let output = "";
+                for (const lang in translations) {
+                  output += `${lang}: ${translations[lang]}\n`;
+                }
+
+                document.getElementById("resultBox").textContent =
+                  output.trim();
+                // clearInterval(pollInterval);
+                // document.getElementById("resultBox").textContent =
+                //   JSON.stringify(
+                //     statusData.translation || statusData.translations,
+                //     null,
+                //     2
+                //   );
+              } else if (statusData.status === "failed") {
+                clearInterval(pollInterval);
+                document.getElementById("resultBox").textContent =
+                  "Translation failed. Please try again.";
+              }
+            } catch (pollError) {
+              console.error("Polling error:", pollError);
+            }
+          }, 2000);
+        } catch (error) {
+          console.error("Error:", error);
+          document.getElementById("resultBox").textContent =
+            "Failed to submit translation request. Check your backend connection.";
+        }
+      }
+    </script>
+
+    <!-- use the following script tag while deploying and comment out the above -->
+
+    <!-- <script>
+      const API_URL = "https://multi-language-translator-api.onrender.com"; // <--- update this to your deployed backend
+
+      async function translateText() {
+        const text_for_translation = document.getElementById("text").value;
+        const languages_chosen = document.getElementById("languages").value;
+
+        if (!text_for_translation.trim() || !languages_chosen.trim()) {
+          document.getElementById("resultBox").textContent =
+            "Please enter text and at least one language.";
+          return;
+        }
+
+        const payload = {
+          text: text_for_translation,
+          languages: languages_chosen.split(",").map((lang) => lang.trim()),
+        };
+
+        try {
+          // POST to deployed backend
+          const response = await fetch(`${API_URL}/translate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok)
+            throw new Error(`HTTP error! Status: ${response.status}`);
+
+          const result = await response.json();
+          const taskId = result.task_id;
+
+          document.getElementById("resultBox").textContent =
+            `Fetching translation...`;
+
+          // Poll for translation result
+          const pollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await fetch(
+                `${API_URL}/translate/${taskId}`
+              );
+              const statusData = await statusResponse.json();
+
+              if (statusData.status === "completed") {
+                clearInterval(pollInterval);
+
+                let translations =
+                  statusData.translation || statusData.translations;
+
+                if (typeof translations === "string") {
+                  try {
+                    translations = JSON.parse(translations);
+                  } catch (e) {
+                    console.error(
+                      "Parsing error: backend returned malformed JSON"
+                    );
+                  }
+                }
+
+                let output = "";
+                for (const lang in translations) {
+                  output += `${lang}: ${translations[lang]}\n`;
+                }
+
+                document.getElementById("resultBox").textContent =
+                  output.trim();
+              } else if (statusData.status === "failed") {
+                clearInterval(pollInterval);
+                document.getElementById("resultBox").textContent =
+                  "Translation failed. Please try again.";
+              }
+            } catch (pollError) {
+              console.error("Polling error:", pollError);
+            }
+          }, 2000);
+        } catch (error) {
+          console.error("Error:", error);
+          document.getElementById("resultBox").textContent =
+            "Failed to submit translation request. Check your backend connection.";
+        }
+      }
+    </script> -->
+  </body>
+</html>
